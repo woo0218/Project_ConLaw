@@ -51,6 +51,33 @@ LLM_RETRY_COUNT: int = 1
 
 REQUIRED_PLACEHOLDERS: list[str] = ["{{법령근거}}", "{{조항번호}}"]
 
+AUTO_SEED_CONSTRUCTION_LAWS: bool = os.getenv("AUTO_SEED_CONSTRUCTION_LAWS", "1") == "1"
+AUTO_SEED_MIN_LAW_ROWS: int = int(os.getenv("AUTO_SEED_MIN_LAW_ROWS", "200"))
+CONSTRUCTION_LAW_QUERIES: list[str] = [
+    "건설기술 진흥법",
+    "건설기술 진흥법 시행령",
+    "건설기술 진흥법 시행규칙",
+    "건축법",
+    "건축법 시행령",
+    "건축법 시행규칙",
+    "건설산업기본법",
+    "건설산업기본법 시행령",
+    "주택법",
+    "주택법 시행령",
+    "시설물의 안전 및 유지관리에 관한 특별법",
+    "시설물의 안전 및 유지관리에 관한 특별법 시행령",
+    "산업안전보건법",
+    "산업안전보건법 시행령",
+    "중대재해 처벌 등에 관한 법률",
+    "중대재해 처벌 등에 관한 법률 시행령",
+    "국토의 계획 및 이용에 관한 법률",
+    "소방시설 설치 및 관리에 관한 법률",
+    "전기안전관리법",
+    "승강기 안전관리법",
+    "건설폐기물의 재활용촉진에 관한 법률",
+    "환경영향평가법",
+]
+
 
 def law_search_url(query: str, page: int = 1, display: int = 100) -> str:
     params = {

@@ -1,15 +1,17 @@
 import os
 import logging
 import sys
+import asyncio
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.config import OUTPUT_DIR, TEMPLATES_DIR, LOG_PATH
+from app.config import AUTO_SEED_CONSTRUCTION_LAWS, OUTPUT_DIR, TEMPLATES_DIR, LOG_PATH
 from app.database import create_tables
 from app.routers.api import router
+from app.services.law_seed import ensure_construction_laws_seeded
 
 
 if getattr(sys, "frozen", False):
@@ -62,3 +64,5 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 @app.on_event("startup")
 async def startup() -> None:
     await create_tables()
+    if AUTO_SEED_CONSTRUCTION_LAWS:
+        asyncio.create_task(ensure_construction_laws_seeded())

@@ -14,6 +14,24 @@
         <p class="text-sm text-zinc-600">현장 상황을 입력하고 관련 법령 후보를 선택한 뒤 보고서를 생성합니다.</p>
     </header>
 
+    <section id="seedPanel" class="mb-5 rounded-md border border-zinc-200 bg-white p-4">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+                <h2 class="text-base font-semibold">법령 데이터 준비</h2>
+                <p id="seedMessage" class="mt-1 text-sm text-zinc-600">법령 데이터 준비 상태를 확인 중입니다.</p>
+            </div>
+            <div id="seedCounts" class="text-xs font-medium text-zinc-500">0 / 0</div>
+        </div>
+        <div class="mt-3 h-2 overflow-hidden rounded-full bg-zinc-100">
+            <div id="seedProgressBar" class="h-full w-0 rounded-full bg-zinc-900 transition-all"></div>
+        </div>
+        <div class="mt-2 grid gap-1 text-xs text-zinc-500 sm:grid-cols-[1fr_auto]">
+            <div id="seedCurrentQuery"></div>
+            <div id="seedInsertedSkipped"></div>
+        </div>
+        <div id="seedWarning" class="mt-2 hidden rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800"></div>
+    </section>
+
     <section class="mb-5 grid gap-4 lg:grid-cols-[1fr_1fr]">
         <div class="rounded-md border border-zinc-200 bg-white p-4">
             <div class="mb-3 flex items-center justify-between gap-3">
@@ -225,6 +243,90 @@ function createStatus(text, tone = "neutral") {
     return div;
 }
 
+function updateSeedPanel(status) {
+    const panel = document.getElementById("seedPanel");
+    const message = document.getElementById("seedMessage");
+    const counts = document.getElementById("seedCounts");
+    const bar = document.getElementById("seedProgressBar");
+    const current = document.getElementById("seedCurrentQuery");
+    const insertedSkipped = document.getElementById("seedInsertedSkipped");
+    const warning = document.getElementById("seedWarning");
+
+    if (status.enabled === false) {
+        panel.classList.remove("hidden");
+        message.textContent = "자동 법령 적재가 비활성화되어 있습니다.";
+        counts.textContent = "";
+        bar.style.width = "0%";
+        current.textContent = "";
+        insertedSkipped.textContent = "";
+        warning.classList.add("hidden");
+        return;
+    }
+
+    const total = Number(status.total_queries) || 0;
+    const completed = Number(status.completed_queries) || 0;
+    const percent = total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 0;
+
+    panel.classList.remove("hidden");
+    counts.textContent = total > 0 ? `${completed} / ${total}` : "";
+    bar.style.width = `${percent}%`;
+
+    if (status.running === true) {
+        message.textContent = "건설 관련 법령 데이터를 준비 중입니다. 검색 결과는 준비 상태에 따라 점차 늘어날 수 있습니다.";
+    } else if (status.done === true) {
+        message.textContent = "법령 데이터 준비가 완료되었습니다.";
+    } else {
+        message.textContent = status.message || "법령 데이터 준비 상태를 확인 중입니다.";
+    }
+
+    current.textContent = status.current_query ? `현재 처리 중: ${status.current_query}` : "";
+    const pendingCount = Array.isArray(status.pending_queries) ? status.pending_queries.length : 0;
+    const skippedQueryCount = Array.isArray(status.skipped_queries) ? status.skipped_queries.length : 0;
+    insertedSkipped.textContent =
+        `추가 ${Number(status.inserted) || 0}건 / 중복 ${Number(status.skipped) || 0}건` +
+        ` / 대기 법령 ${pendingCount}건 / 확인 완료 ${skippedQueryCount}건`;
+
+    const errors = Array.isArray(status.errors) ? status.errors : [];
+    if (errors.length) {
+        warning.classList.remove("hidden");
+        warning.textContent = `일부 법령 적재 중 오류가 발생했습니다. (${errors.length}건)`;
+    } else {
+        warning.classList.add("hidden");
+        warning.textContent = "";
+    }
+}
+
+async function pollSeedStatus() {
+    try {
+        const res = await fetch("/laws/seed/status");
+        if (!res.ok) {
+            return true;
+        }
+        const status = await res.json();
+        updateSeedPanel(status);
+        if (status.enabled === false) {
+            return false;
+        }
+        return !(status.done === true && status.running === false);
+    } catch (error) {
+        return true;
+    }
+}
+
+function startSeedStatusPolling() {
+    pollSeedStatus().then((shouldContinue) => {
+        if (!shouldContinue) {
+            return;
+        }
+        const timer = window.setInterval(async () => {
+            const keepPolling = await pollSeedStatus();
+            if (!keepPolling) {
+                window.clearInterval(timer);
+            }
+        }, 2000);
+    });
+}
+
 function renderLawCard(law, source) {
     const button = document.createElement("button");
     button.type = "button";
@@ -421,6 +523,8 @@ async function generateReport() {
         container.appendChild(createStatus("보고서 생성 중 오류가 발생했습니다.", "error"));
     }
 }
+
+window.addEventListener("load", startSeedStatusPolling);
 </script>
 </body>
 </html>

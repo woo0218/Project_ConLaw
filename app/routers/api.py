@@ -15,6 +15,7 @@ from app.services.validator import validate_template
 from app.services.law import LawService
 from app.services.llm import LLMService
 from app.services.docx import DocxService
+from app.services.law_seed import get_seed_status
 
 
 logger = logging.getLogger(__name__)
@@ -170,6 +171,11 @@ async def search_laws(q: str = "", limit: int = 10) -> list[dict]:
 
     safe_limit = max(1, min(limit, 50))
     return await law_service.search_fallback(clean_query, safe_limit)
+
+
+@router.get("/laws/seed/status")
+async def law_seed_status() -> dict:
+    return await get_seed_status()
 
 
 @router.post("/laws/recommend")
