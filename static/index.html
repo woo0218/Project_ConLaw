@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>감리보고서 자동생성</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="min-h-screen bg-zinc-50 text-zinc-900">
+<main class="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-5 py-6">
+    <header class="mb-5 flex flex-col gap-1 border-b border-zinc-200 pb-4">
+        <h1 class="text-2xl font-semibold tracking-normal">감리보고서 자동생성</h1>
+        <p class="text-sm text-zinc-600">현장 상황을 입력하고 관련 법령 후보를 선택한 뒤 보고서를 생성합니다.</p>
+    </header>
+
+    <section class="mb-5 grid gap-4 lg:grid-cols-[1fr_1fr]">
+        <div class="rounded-md border border-zinc-200 bg-white p-4">
+            <div class="mb-3 flex items-center justify-between gap-3">
+                <div>
+                    <h2 class="text-base font-semibold">템플릿 업로드</h2>
+                    <p class="text-sm text-zinc-500">필수 항목이 포함된 docx 파일을 업로드합니다.</p>
+                </div>
+                <span id="templateBadge" class="rounded bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-600">대기</span>
+            </div>
+            <div class="flex flex-col gap-3 sm:flex-row">
+                <input
+                    type="file"
+                    id="templateFile"
+                    accept=".docx"
+                    class="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-zinc-900 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white"
+                />
+                <button
+                    type="button"
+                    onclick="uploadTemplate()"
+                    class="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+                >
+                    업로드
+                </button>
+            </div>
+            <div id="templateResult" class="mt-3 text-sm text-zinc-600"></div>
+        </div>
+
+        <div class="rounded-md border border-zinc-200 bg-white p-4">
+            <h2 class="mb-2 text-base font-semibold">최종 선택 법령</h2>
+            <div id="selectedLawInfo" class="min-h-16 rounded-md border border-dashed border-zinc-300 bg-zinc-50 p-3 text-sm text-zinc-500">
+                아직 선택된 법령이 없습니다.
+            </div>
+        </div>
+    </section>
+
+    <section class="grid flex-1 gap-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
+        <section class="flex min-h-0 flex-col rounded-md border border-zinc-200 bg-white">
+            <div class="border-b border-zinc-200 p-4">
+                <h2 class="text-lg font-semibold">현장 상황 입력</h2>
+                <p class="mt-1 text-sm text-zinc-500">입력 내용을 기준으로 DB에 저장된 법령 조문 후보를 검색합니다.</p>
+            </div>
+
+            <div class="flex flex-1 flex-col gap-4 p-4">
+                <textarea
+                    id="context"
+                    class="min-h-36 w-full resize-y rounded-md border border-zinc-300 px-3 py-3 text-sm leading-6 outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-200"
+                    placeholder="예: 철근 배근이 설계도면과 다르게 시공된 것이 확인되었으며, 일부 구간에서 정착길이가 부족한 상태임."
+                ></textarea>
+
+                <div class="flex flex-col gap-2 sm:flex-row">
+                    <button
+                        type="button"
+                        onclick="searchLaws()"
+                        class="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+                    >
+                        법령 후보 검색
+                    </button>
+                </div>
+
+                <div class="flex items-center justify-between border-b border-zinc-200 pb-2">
+                    <h3 class="text-base font-semibold">법령 후보</h3>
+                    <span id="lawCount" class="text-xs font-medium text-zinc-500">0건</span>
+                </div>
+
+                <div id="lawStatus" class="text-sm text-zinc-500">현장 상황을 입력한 뒤 법령 후보를 검색하세요.</div>
+                <div id="lawList" class="grid gap-3"></div>
+            </div>
+        </section>
+
+        <aside class="flex min-h-0 flex-col gap-5">
+            <section class="flex min-h-0 flex-1 flex-col rounded-md border border-zinc-200 bg-white">
+                <div class="border-b border-zinc-200 p-4">
+                    <h2 class="text-lg font-semibold">법령 본문</h2>
+                    <p class="mt-1 text-sm text-zinc-500">법령 후보를 선택하면 조문 전체 내용을 확인할 수 있습니다.</p>
+                </div>
+                <div class="flex flex-1 flex-col gap-3 p-4">
+                    <div id="lawDetailStatus" class="text-sm text-zinc-500">아직 선택된 법령이 없습니다.</div>
+                    <div id="lawDetail" class="max-h-[520px] overflow-auto rounded-md border border-zinc-200 bg-zinc-50 p-4 text-sm leading-6 text-zinc-800"></div>
+                </div>
+            </section>
+
+            <section class="rounded-md border border-zinc-200 bg-white p-4">
+                <h2 class="text-lg font-semibold">보고서 생성</h2>
+                <p class="mt-1 text-sm text-zinc-500">업로드한 템플릿과 선택한 법령으로 docx 보고서를 생성합니다.</p>
+                <button
+                    type="button"
+                    onclick="generateReport()"
+                    class="mt-4 w-full rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+                >
+                    보고서 생성
+                </button>
+                <div id="download" class="mt-4 text-sm"></div>
+            </section>
+        </aside>
+    </section>
+</main>
+
+<script>
+let templateId = null;
+let selectedLawId = null;
+let selectedLawLabel = "";
+let searchedLaws = [];
+
+function setText(id, value) {
+    document.getElementById(id).textContent = value;
+}
+
+function clearNode(node) {
+    while (node.firstChild) {
+        node.removeChild(node.firstChild);
+    }
+}
+
+function updateSelectedLaw(lawId, label) {
+    selectedLawId = lawId;
+    selectedLawLabel = label;
+
+    const info = document.getElementById("selectedLawInfo");
+    info.className = "min-h-16 rounded-md border border-zinc-900 bg-zinc-50 p-3 text-sm text-zinc-900";
+    clearNode(info);
+
+    const title = document.createElement("div");
+    title.className = "font-semibold";
+    title.textContent = "선택된 법령";
+
+    const body = document.createElement("div");
+    body.className = "mt-1 text-zinc-700";
+    body.textContent = label;
+
+    const idText = document.createElement("div");
+    idText.className = "mt-1 text-xs text-zinc-500";
+    idText.textContent = lawId;
+
+    info.appendChild(title);
+    info.appendChild(body);
+    info.appendChild(idText);
+}
+
+function resetLawDetail() {
+    setText("lawDetailStatus", "아직 선택된 법령이 없습니다.");
+    clearNode(document.getElementById("lawDetail"));
+}
+
+function renderLawDetail(law) {
+    const container = document.getElementById("lawDetail");
+    clearNode(container);
+
+    const title = document.createElement("div");
+    title.className = "text-base font-semibold text-zinc-900";
+    title.textContent = `${law.title || "제목 없음"} ${law.article_no || ""}`.trim();
+
+    const category = document.createElement("div");
+    category.className = "mt-1 text-xs text-zinc-500";
+    category.textContent = law.category || "";
+
+    const article = document.createElement("pre");
+    article.className = "mt-4 whitespace-pre-wrap break-words font-sans text-sm leading-7 text-zinc-800";
+    article.textContent = law.article || "본문 내용이 없습니다.";
+
+    container.appendChild(title);
+    if (category.textContent) {
+        container.appendChild(category);
+    }
+    container.appendChild(article);
+}
+
+async function loadLawDetail(lawId) {
+    if (!lawId) {
+        resetLawDetail();
+        return;
+    }
+
+    setText("lawDetailStatus", "법령 본문을 불러오는 중...");
+    clearNode(document.getElementById("lawDetail"));
+
+    try {
+        const res = await fetch(`/laws/${encodeURIComponent(lawId)}`);
+        const data = await res.json();
+        if (!res.ok) {
+            setText("lawDetailStatus", data.detail || "법령 본문을 불러오지 못했습니다.");
+            return;
+        }
+        setText("lawDetailStatus", "선택한 법령 조문 본문입니다.");
+        renderLawDetail(data);
+    } catch (error) {
+        setText("lawDetailStatus", "법령 본문을 불러오지 못했습니다.");
+    }
+}
+
+function resetSelectedLaw() {
+    selectedLawId = null;
+    selectedLawLabel = "";
+    const info = document.getElementById("selectedLawInfo");
+    info.className = "min-h-16 rounded-md border border-dashed border-zinc-300 bg-zinc-50 p-3 text-sm text-zinc-500";
+    info.textContent = "아직 선택된 법령이 없습니다.";
+    resetLawDetail();
+}
+
+function createStatus(text, tone = "neutral") {
+    const div = document.createElement("div");
+    const tones = {
+        neutral: "rounded-md bg-zinc-100 px-3 py-2 text-sm text-zinc-600",
+        warn: "rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800",
+        error: "rounded-md bg-red-50 px-3 py-2 text-sm text-red-700",
+        ok: "rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800",
+    };
+    div.className = tones[tone] || tones.neutral;
+    div.textContent = text;
+    return div;
+}
+
+function renderLawCard(law, source) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "w-full rounded-md border border-zinc-200 bg-white p-4 text-left hover:border-zinc-900 hover:bg-zinc-50";
+    button.dataset.lawId = law.id || law.law_id || "";
+
+    const top = document.createElement("div");
+    top.className = "flex items-start justify-between gap-3";
+
+    const titleWrap = document.createElement("div");
+    titleWrap.className = "min-w-0";
+
+    const title = document.createElement("div");
+    title.className = "font-semibold text-zinc-900";
+    title.textContent = law.title || law.label || law.law_id || "제목 없음";
+
+    const articleNo = document.createElement("div");
+    articleNo.className = "mt-1 text-xs font-medium text-zinc-500";
+    articleNo.textContent = law.article_no || "";
+
+    titleWrap.appendChild(title);
+    titleWrap.appendChild(articleNo);
+
+    const badge = document.createElement("span");
+    badge.className = "shrink-0 rounded bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-600";
+    badge.textContent = "후보";
+
+    top.appendChild(titleWrap);
+    top.appendChild(badge);
+
+    const preview = document.createElement("p");
+    preview.className = "mt-3 text-sm leading-6 text-zinc-700";
+    preview.textContent = law.preview || law.reason || law.article || "내용 없음";
+
+    const meta = document.createElement("div");
+    meta.className = "mt-3 text-xs text-zinc-500";
+    const scoreValue = Number(law.score);
+    meta.textContent = Number.isFinite(scoreValue) ? `score ${scoreValue.toFixed(2)}` : "";
+
+    button.appendChild(top);
+    button.appendChild(preview);
+    if (meta.textContent) {
+        button.appendChild(meta);
+    }
+
+    button.onclick = () => {
+        document.querySelectorAll("[data-law-id]").forEach((el) => {
+            el.classList.remove("border-zinc-900", "bg-zinc-100");
+        });
+        button.classList.add("border-zinc-900", "bg-zinc-100");
+        const label = `${law.title || law.label || law.law_id || "제목 없음"} ${law.article_no || ""}`.trim();
+        updateSelectedLaw(button.dataset.lawId, label);
+        loadLawDetail(button.dataset.lawId);
+    };
+
+    return button;
+}
+
+async function uploadTemplate() {
+    const file = document.getElementById("templateFile").files[0];
+    if (!file) {
+        alert("템플릿 파일을 선택해 주세요.");
+        return;
+    }
+
+    setText("templateResult", "업로드 중...");
+    setText("templateBadge", "진행 중");
+
+    const form = new FormData();
+    form.append("file", file);
+
+    try {
+        const res = await fetch("/template/upload", {
+            method: "POST",
+            body: form,
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+            setText("templateResult", data.detail || "템플릿 업로드 중 오류가 발생했습니다.");
+            setText("templateBadge", "실패");
+            return;
+        }
+
+        templateId = data.template_id;
+        setText("templateBadge", "완료");
+        setText("templateResult", `업로드 완료: ${(data.placeholders || []).join(", ")}`);
+    } catch (error) {
+        setText("templateResult", "템플릿 업로드 중 오류가 발생했습니다.");
+        setText("templateBadge", "실패");
+    }
+}
+
+async function searchLaws() {
+    const context = document.getElementById("context").value.trim();
+    if (!context) {
+        alert("현장 상황을 입력해 주세요.");
+        return;
+    }
+
+    searchedLaws = [];
+    resetSelectedLaw();
+    setText("lawCount", "0건");
+    setText("lawStatus", "검색 중...");
+
+    const lawList = document.getElementById("lawList");
+    clearNode(lawList);
+
+    try {
+        const res = await fetch(`/laws/search?q=${encodeURIComponent(context)}&limit=10`);
+        const data = await res.json();
+
+        if (!res.ok) {
+            setText("lawStatus", data.detail || "법령 검색 중 오류가 발생했습니다.");
+            return;
+        }
+
+        const laws = Array.isArray(data) ? data : (Array.isArray(data.laws) ? data.laws : []);
+        searchedLaws = laws;
+        setText("lawCount", `${laws.length}건`);
+        clearNode(lawList);
+
+        if (!Array.isArray(data) && data.fallback === true) {
+            lawList.appendChild(createStatus("정확한 검색 결과가 없어 최근 저장된 법령을 표시합니다.", "warn"));
+        }
+
+        if (!laws.length) {
+            setText("lawStatus", "검색 결과가 없습니다. 더 짧은 키워드로 다시 검색해 주세요.");
+            return;
+        }
+
+        setText("lawStatus", "후보를 클릭하면 해당 법령으로 보고서를 생성할 수 있습니다.");
+        laws.forEach((law) => {
+            lawList.appendChild(renderLawCard(law, "candidate"));
+        });
+    } catch (error) {
+        setText("lawStatus", "법령 검색 중 오류가 발생했습니다.");
+    }
+}
+
+async function generateReport() {
+    const context = document.getElementById("context").value.trim();
+    if (!templateId) {
+        alert("템플릿을 업로드해 주세요.");
+        return;
+    }
+    if (!selectedLawId) {
+        alert("법령 후보 또는 추천 결과에서 법령을 선택해 주세요.");
+        return;
+    }
+    if (!context) {
+        alert("현장 상황을 입력해 주세요.");
+        return;
+    }
+
+    const container = document.getElementById("download");
+    clearNode(container);
+    container.appendChild(createStatus("보고서 생성 중...", "neutral"));
+
+    try {
+        const res = await fetch("/report/generate", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+                template_id: templateId,
+                law_id: selectedLawId,
+                user_input: context,
+            }),
+        });
+
+        const data = await res.json();
+        clearNode(container);
+
+        if (!res.ok) {
+            container.appendChild(createStatus(data.detail || "보고서 생성 중 오류가 발생했습니다.", "error"));
+            return;
+        }
+
+        const link = document.createElement("a");
+        link.href = `/report/${data.report_id}/download`;
+        link.download = data.filename || "감리보고서.docx";
+        link.className = "inline-flex w-full items-center justify-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700";
+        link.textContent = "다운로드";
+        container.appendChild(link);
+
+        const unmatched = Array.isArray(data.unmatched_placeholders) ? data.unmatched_placeholders : [];
+        if (unmatched.length) {
+            container.appendChild(createStatus(`미입력 항목: ${unmatched.join(", ")}`, "warn"));
+        } else {
+            container.appendChild(createStatus("보고서 생성이 완료되었습니다.", "ok"));
+        }
+    } catch (error) {
+        clearNode(container);
+        container.appendChild(createStatus("보고서 생성 중 오류가 발생했습니다.", "error"));
+    }
+}
+</script>
+</body>
+</html>

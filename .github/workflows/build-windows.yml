@@ -1,0 +1,60 @@
+name: Build Windows EXE
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Ensure resource directories
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path static | Out-Null
+          New-Item -ItemType Directory -Force -Path data | Out-Null
+
+      - name: Build executable
+        shell: pwsh
+        run: |
+          $args = @(
+            "--noconfirm",
+            "--onedir",
+            "--name", "MyApp",
+            "--add-data", "static;static",
+            "--hidden-import", "app.main",
+            "--hidden-import", "app.routers.api",
+            "--hidden-import", "uvicorn",
+            "--hidden-import", "uvicorn.logging",
+            "--hidden-import", "uvicorn.loops",
+            "--hidden-import", "uvicorn.protocols.http",
+            "--hidden-import", "fastapi"
+          )
+          if (Test-Path "data/synonyms.json") {
+            $args += @("--add-data", "data/synonyms.json;data")
+          }
+          $args += "run_app.py"
+          pyinstaller @args
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MyApp-windows
+          path: dist/MyApp

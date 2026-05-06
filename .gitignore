@@ -1,0 +1,13 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+build/
+dist/
+*.spec
+data/app.db
+data/app.log
+data/last_law_api_response.xml
+data/last_law_detail_response.xml
+outputs/
+data/templates/
